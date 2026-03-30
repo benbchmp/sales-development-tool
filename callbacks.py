@@ -32,33 +32,33 @@ def register_callbacks(app):
         if not api_key:
             return no_update, "Clé API Google manquante. Vérifiez votre fichier .env", True
 
-        connector = GooglePlacesConnector(api_key=api_key)
-
         try:
+            connector = GooglePlacesConnector(api_key=api_key)
+
             lat, lng = connector.geocode(city)
-        except ValueError as e:
-            return no_update, f"Erreur de géocodage : {e}", True
+            places = connector.search(lat=lat, lng=lng, place_type=place_type)
 
-        places = connector.search(lat=lat, lng=lng, place_type=place_type)
+            for place in places:
+                db.upsert_place(place)
 
-        for place in places:
-            db.upsert_place(place)
+            if no_website_filter and "no_website" in no_website_filter:
+                display = [p for p in places if not p["has_website"]]
+            else:
+                display = places
 
-        if no_website_filter and "no_website" in no_website_filter:
-            display = [p for p in places if not p["has_website"]]
-        else:
-            display = places
+            for lead in display:
+                if lead.get("maps_url"):
+                    lead["maps_url"] = f"[Voir]({lead['maps_url']})"
 
-        for lead in display:
-            if lead.get("maps_url"):
-                lead["maps_url"] = f"[Voir]({lead['maps_url']})"
+            status = (
+                f"{len(display)} résultat(s) trouvé(s) "
+                f"({connector.api_call_count} appels API consommés)"
+            )
+            export_disabled = len(display) == 0
+            return display, status, export_disabled
 
-        status = (
-            f"{len(display)} résultat(s) trouvé(s) "
-            f"({connector.api_call_count} appels API consommés)"
-        )
-        export_disabled = len(display) == 0
-        return display, status, export_disabled
+        except Exception as e:
+            return [], f"Erreur : {e}", True
 
     @app.callback(
         Output("table-results", "data"),

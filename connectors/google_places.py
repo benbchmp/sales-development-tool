@@ -22,7 +22,7 @@ class GooglePlacesConnector:
         resp = requests.get(GEOCODE_URL, params={
             "address": f"{city}, France",
             "key": self.api_key,
-        })
+        }, timeout=10)
         self.api_call_count += 1
         data = resp.json()
         if data["status"] != "OK" or not data["results"]:
@@ -31,17 +31,20 @@ class GooglePlacesConnector:
         return loc["lat"], loc["lng"]
 
     def _get_place_details(self, place_id: str) -> dict:
-        resp = requests.get(DETAILS_URL, params={
-            "place_id": place_id,
-            "fields": DETAILS_FIELDS,
-            "key": self.api_key,
-        })
-        with self._lock:
-            self.api_call_count += 1
-        data = resp.json()
-        if data["status"] != "OK":
+        try:
+            resp = requests.get(DETAILS_URL, params={
+                "place_id": place_id,
+                "fields": DETAILS_FIELDS,
+                "key": self.api_key,
+            }, timeout=10)
+            with self._lock:
+                self.api_call_count += 1
+            data = resp.json()
+            if data["status"] != "OK":
+                return {}
+            return data.get("result", {})
+        except Exception:
             return {}
-        return data.get("result", {})
 
     def search(self, lat: float, lng: float, place_type: str, radius: int = 15000) -> list[dict]:
         self._lock = threading.Lock()
@@ -54,7 +57,7 @@ class GooglePlacesConnector:
         }
         # Collect all place_ids first (sequential, pagination)
         while True:
-            resp = requests.get(NEARBY_URL, params=params)
+            resp = requests.get(NEARBY_URL, params=params, timeout=10)
             self.api_call_count += 1
             data = resp.json()
             if data["status"] not in ("OK", "ZERO_RESULTS"):
