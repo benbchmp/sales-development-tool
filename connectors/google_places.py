@@ -1,6 +1,8 @@
 # connectors/google_places.py
 import time
+import threading
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 NEARBY_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
@@ -34,28 +36,46 @@ class GooglePlacesConnector:
             "fields": DETAILS_FIELDS,
             "key": self.api_key,
         })
-        self.api_call_count += 1
+        with self._lock:
+            self.api_call_count += 1
         data = resp.json()
         if data["status"] != "OK":
             return {}
         return data.get("result", {})
 
     def search(self, lat: float, lng: float, place_type: str, radius: int = 15000) -> list[dict]:
-        results = []
+        self._lock = threading.Lock()
+        raw_items = []
         params = {
             "location": f"{lat},{lng}",
             "radius": radius,
             "type": place_type,
             "key": self.api_key,
         }
+        # Collect all place_ids first (sequential, pagination)
         while True:
             resp = requests.get(NEARBY_URL, params=params)
             self.api_call_count += 1
             data = resp.json()
             if data["status"] not in ("OK", "ZERO_RESULTS"):
                 break
-            for item in data.get("results", []):
-                details = self._get_place_details(item["place_id"])
+            raw_items.extend(data.get("results", []))
+            next_token = data.get("next_page_token")
+            if not next_token:
+                break
+            time.sleep(2)
+            params = {"pagetoken": next_token, "key": self.api_key}
+
+        # Fetch details in parallel
+        results = []
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_item = {
+                executor.submit(self._get_place_details, item["place_id"]): item
+                for item in raw_items
+            }
+            for future in as_completed(future_to_item):
+                item = future_to_item[future]
+                details = future.result()
                 results.append({
                     "place_id": item["place_id"],
                     "name": details.get("name", item.get("name", "")),
@@ -67,9 +87,4 @@ class GooglePlacesConnector:
                     "has_website": "website" in details,
                     "maps_url": details.get("url", ""),
                 })
-            next_token = data.get("next_page_token")
-            if not next_token:
-                break
-            time.sleep(2)
-            params = {"pagetoken": next_token, "key": self.api_key}
         return results
