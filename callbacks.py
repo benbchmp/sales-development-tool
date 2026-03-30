@@ -1,6 +1,7 @@
 # callbacks.py
 import os
 import tempfile
+import requests
 from dash import Input, Output, State, no_update, dcc
 from dotenv import load_dotenv
 from connectors.google_places import GooglePlacesConnector
@@ -13,6 +14,39 @@ db = Database()
 
 
 def register_callbacks(app):
+
+    @app.callback(
+        Output("input-city", "options"),
+        Input("input-city", "search_value"),
+        prevent_initial_call=True,
+    )
+    def autocomplete_city(search_value):
+        if not search_value or len(search_value) < 2:
+            return []
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            return []
+        try:
+            resp = requests.get(
+                "https://maps.googleapis.com/maps/api/place/autocomplete/json",
+                params={
+                    "input": search_value,
+                    "types": "(cities)",
+                    "components": "country:fr",
+                    "language": "fr",
+                    "key": api_key,
+                },
+                timeout=5,
+            )
+            data = resp.json()
+            if data["status"] != "OK":
+                return []
+            return [
+                {"label": p["description"], "value": p["structured_formatting"]["main_text"]}
+                for p in data.get("predictions", [])
+            ]
+        except Exception:
+            return []
 
     @app.callback(
         Output("store-results", "data"),

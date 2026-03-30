@@ -1,6 +1,7 @@
 # layout.py
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
+from place_types import PLACE_TYPES
 
 
 def create_layout():
@@ -11,11 +12,23 @@ def create_layout():
         dbc.Row([
             dbc.Col([
                 dbc.Label("Ville"),
-                dbc.Input(id="input-city", placeholder="ex: Lyon", type="text"),
+                dcc.Dropdown(
+                    id="input-city",
+                    options=[],
+                    placeholder="Tapez une ville (ex: Lyon)...",
+                    search_value="",
+                    style={"color": "#000"},
+                ),
             ], width=4),
             dbc.Col([
                 dbc.Label("Type de commerce"),
-                dbc.Input(id="input-type", placeholder="ex: plumber, photographer", type="text"),
+                dcc.Dropdown(
+                    id="input-type",
+                    options=PLACE_TYPES,
+                    placeholder="Tapez un métier (ex: plombier)...",
+                    search_value="",
+                    style={"color": "#000"},
+                ),
             ], width=4),
             dbc.Col([
                 dbc.Label("Filtre"),
