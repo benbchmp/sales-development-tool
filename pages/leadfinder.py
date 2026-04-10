@@ -2,7 +2,7 @@
 LeadFinder – page de recherche de leads Google Maps
 """
 
-import os, time, requests, pandas as pd
+import os, re, time, requests, pandas as pd
 from dotenv import load_dotenv
 from dash import html, dcc, dash_table, Output, Input, State, no_update
 import dash_bootstrap_components as dbc
@@ -100,13 +100,26 @@ def enrich_with_details(places: list[dict]) -> list[dict]:
     return places
 
 
+def _extract_city_postal(address: str) -> str:
+    """Extract 'VILLE, 00000' from a French Google Maps address."""
+    # Typical format: "12 Rue X, 75011 Paris, France"
+    m = re.search(r"(\d{5})\s+([^,]+)", address)
+    if m:
+        return f"{m.group(2).strip().upper()}, {m.group(1)}"
+    # Fallback: return last meaningful part before country
+    parts = [p.strip() for p in address.split(",")]
+    if len(parts) >= 2:
+        return parts[-2].upper()
+    return address.upper()
+
+
 def places_to_df(places: list[dict]) -> pd.DataFrame:
     rows = []
     for p in places:
         place_id = p.get("place_id", "")
         rows.append({
             "Nom": p.get("name", ""),
-            "Adresse": p.get("formatted_address", ""),
+            "Localisation": _extract_city_postal(p.get("formatted_address", "")),
             "Téléphone": p.get("_phone", ""),
             "Note": p.get("rating", ""),
             "Avis": p.get("user_ratings_total", ""),
@@ -235,7 +248,7 @@ def register_callbacks(app):
             df = df[df["Site web"].fillna("").str.strip() == ""]
         shown = len(df)
 
-        visible_cols = ["Nom", "Adresse", "Téléphone", "Note", "Avis", "Site web", "Statut"]
+        visible_cols = ["Nom", "Localisation", "Téléphone", "Note", "Avis", "Site web", "Statut"]
         columns = [{"name": c, "id": c} for c in visible_cols]
         columns.append({"name": "Google Maps", "id": "Google Maps", "presentation": "markdown"})
 
