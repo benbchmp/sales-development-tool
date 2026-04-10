@@ -26,35 +26,47 @@ cold_calls.register_callbacks(app)
 
 # ── Navbar ───────────────────────────────────────────────────────────
 
+def _nav_tab(label: str, href: str, active: bool) -> html.A:
+    style = {
+        "display": "inline-block",
+        "padding": "4px 14px",
+        "fontSize": "0.78rem",
+        "fontFamily": "Consolas, monospace",
+        "letterSpacing": "0.05em",
+        "textDecoration": "none",
+        "border": "1px solid #4dabf7",
+        "borderRadius": "3px",
+        "color": "#fff" if active else "#4dabf7",
+        "backgroundColor": "#1a6fa8" if active else "transparent",
+        "transition": "background 0.15s",
+    }
+    return html.A(label, href=href, style=style)
+
+
 def _navbar(active_path: str) -> dbc.Container:
-    return dbc.Container([
-        dbc.Row(dbc.Col(html.Img(
-            src="/assets/eagle.png",
-            style={
-                "height": "60px",
-                "display": "block",
-                "margin": "16px auto 8px auto",
-                "filter": "invert(1)",
-                "mixBlendMode": "screen",
-            }
-        ))),
-        dbc.Row(dbc.Col(
-            dbc.ButtonGroup([
-                dbc.Button(
-                    "LeadFinder",
-                    href="/",
-                    color="primary",
-                    outline=active_path != "/",
-                ),
-                dbc.Button(
-                    "Cold Calls",
-                    href="/cold-calls",
-                    color="primary",
-                    outline=active_path != "/cold-calls",
-                ),
-            ], className="d-flex justify-content-center mb-3"),
-        )),
-    ], fluid=True)
+    return dbc.Container(
+        dbc.Row([
+            dbc.Col(html.Img(
+                src="/assets/eagle.png",
+                style={
+                    "height": "48px",
+                    "filter": "invert(1)",
+                    "mixBlendMode": "screen",
+                    "display": "block",
+                }
+            ), width="auto", className="d-flex align-items-center"),
+            dbc.Col(width=True),  # spacer
+            dbc.Col(
+                html.Div([
+                    _nav_tab("LeadFinder", "/", active_path == "/"),
+                    _nav_tab("Call Tracker", "/cold-calls", active_path == "/cold-calls"),
+                ], style={"display": "flex", "gap": "8px", "alignItems": "center"}),
+                width="auto", className="d-flex align-items-center",
+            ),
+        ], align="center", className="py-2 px-3", style={"borderBottom": "1px solid #2a2a2a"}),
+        fluid=True,
+        style={"marginBottom": "16px"},
+    )
 
 
 # ── App layout ───────────────────────────────────────────────────────
