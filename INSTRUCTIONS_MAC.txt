@@ -1,0 +1,70 @@
+========================================
+  Comment ouvrir le Terminal sur Mac
+========================================
+
+Le Terminal est l'application qui permet de taper des commandes.
+Pas de panique, tu n'auras que 2 commandes à taper !
+
+
+ÉTAPE 1 – Ouvrir le Terminal
+-----------------------------
+
+Option A (la plus rapide) :
+  - Appuie sur Cmd + Espace (la barre d'espace)
+  - Ça ouvre Spotlight (une barre de recherche en haut de l'écran)
+  - Tape "Terminal"
+  - Appuie sur Entrée
+
+Option B :
+  - Ouvre le Finder
+  - Va dans Applications > Utilitaires
+  - Double-clique sur "Terminal"
+
+
+ÉTAPE 2 – Aller dans le dossier du projet
+------------------------------------------
+
+Une fois le Terminal ouvert, tu vas voir une fenêtre noire (ou blanche)
+avec du texte et un curseur qui clignote.
+
+Tape la commande suivante puis appuie sur Entrée :
+
+  cd ~/Desktop/LeadFinder
+
+Explication : "cd" veut dire "changer de dossier".
+Cette commande te déplace dans le dossier LeadFinder sur ton Bureau.
+
+Si tu as mis le dossier ailleurs, adapte le chemin :
+  - Dans le dossier Téléchargements : cd ~/Downloads/LeadFinder
+  - Dans Documents : cd ~/Documents/LeadFinder
+
+
+ÉTAPE 3 – Lancer l'application
+-------------------------------
+
+Tape cette commande puis appuie sur Entrée :
+
+  bash run.sh
+
+Le script va :
+  1. Vérifier que Python est installé
+  2. Installer ce qu'il faut (la première fois uniquement)
+  3. Ouvrir l'application dans ton navigateur
+
+Tu verras du texte défiler dans le Terminal – c'est normal.
+L'application s'ouvrira toute seule dans ton navigateur.
+
+
+POUR ARRÊTER
+-------------
+
+Retourne dans le Terminal et appuie sur Ctrl+C
+(la touche Ctrl et la touche C en même temps).
+Tu peux ensuite fermer la fenêtre du Terminal.
+
+
+ASTUCE
+------
+
+La prochaine fois, tu n'auras qu'à refaire les étapes 1, 2 et 3.
+Ça ira beaucoup plus vite car tout sera déjà installé.
