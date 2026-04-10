@@ -124,14 +124,18 @@ def layout():
         # Search form
         dbc.Row([
             dbc.Col(dbc.Input(id="lf-input-city", placeholder="Ville (ex: Lyon)", type="text"), md=4),
-            dbc.Col(dcc.Dropdown(
-                id="lf-input-activity",
-                options=ACTIVITY_OPTIONS,
-                placeholder="Activité (liste ou texte libre)...",
-                clearable=True,
-                searchable=True,
-                style={"color": "#000"},
-            ), md=4),
+            dbc.Col(html.Div([
+                dbc.Input(
+                    id="lf-input-activity",
+                    placeholder="Ex: Plombier, Architecte, Laveur de vitres...",
+                    type="text",
+                    list="lf-activity-suggestions",
+                ),
+                html.Datalist(
+                    id="lf-activity-suggestions",
+                    children=[html.Option(value=o["value"]) for o in ACTIVITY_OPTIONS if not o.get("disabled")],
+                ),
+            ]), md=4),
             dbc.Col(dbc.Button("Rechercher", id="lf-btn-search", color="primary", className="w-100"), md=2),
             dbc.Col(dbc.Button(
                 html.I(className="bi bi-download", style={"fontSize": "1.1rem"}),
@@ -193,43 +197,6 @@ def layout():
 # ── Callbacks ────────────────────────────────────────────────────────
 
 def register_callbacks(app):
-    @app.callback(
-        Output("lf-input-activity", "options"),
-        Input("lf-input-activity", "search_value"),
-        prevent_initial_call=True,
-    )
-    def update_activity_options(search):
-        if not search or not search.strip():
-            return ACTIVITY_OPTIONS
-        search_lower = search.strip().lower()
-        # Garder les options existantes qui matchent
-        filtered = [
-            o for o in ACTIVITY_OPTIONS
-            if o.get("disabled") or search_lower in o.get("label", "").lower()
-        ]
-        # Supprimer les catégories orphelines (header sans enfants)
-        cleaned = []
-        for i, o in enumerate(filtered):
-            if o.get("disabled"):
-                has_child = any(
-                    not filtered[j].get("disabled")
-                    for j in range(i + 1, len(filtered))
-                    if not filtered[j].get("disabled") or filtered[j].get("disabled") != filtered[i].get("disabled")
-                )
-                if has_child:
-                    cleaned.append(o)
-            else:
-                cleaned.append(o)
-        # Ajouter le texte libre en tête si pas déjà dans la liste
-        exact_match = any(
-            o.get("value", "").lower() == search_lower
-            for o in ACTIVITY_OPTIONS if not o.get("disabled")
-        )
-        if not exact_match:
-            free = [{"label": f'🔍 "{search.strip()}"', "value": search.strip()}]
-            return free + (cleaned if cleaned else ACTIVITY_OPTIONS)
-        return cleaned if cleaned else ACTIVITY_OPTIONS
-
     @app.callback(
         Output("lf-store-data", "data"),
         Input("lf-btn-search", "n_clicks"),
