@@ -133,7 +133,14 @@ def layout():
                 style={"color": "#000"},
             ), md=4),
             dbc.Col(dbc.Button("Rechercher", id="lf-btn-search", color="primary", className="w-100"), md=2),
-            dbc.Col(dbc.Button("Export CSV", id="lf-btn-csv", color="success", outline=True, className="w-100"), md=2),
+            dbc.Col(dbc.Button(
+                html.I(className="bi bi-download", style={"fontSize": "1.1rem"}),
+                id="lf-btn-csv",
+                color="secondary",
+                outline=True,
+                title="Exporter en CSV",
+                style={"padding": "6px 12px"},
+            ), md="auto", className="d-flex align-items-center"),
         ], className="mb-3"),
 
         # Filters

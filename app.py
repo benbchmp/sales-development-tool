@@ -15,7 +15,7 @@ load_dotenv()
 
 app = Dash(
     __name__,
-    external_stylesheets=[dbc.themes.DARKLY],
+    external_stylesheets=[dbc.themes.DARKLY, dbc.icons.BOOTSTRAP],
     suppress_callback_exceptions=True,
 )
 app.title = "LeadFinder"
