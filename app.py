@@ -74,19 +74,23 @@ def _navbar(active_path: str) -> dbc.Container:
 app.layout = html.Div([
     dcc.Location(id="url", refresh=False),
     html.Div(id="navbar-container"),
-    html.Div(id="page-content"),
+    html.Div(leadfinder.layout(), id="page-leadfinder"),
+    html.Div(cold_calls.layout(), id="page-coldcalls"),
 ])
 
 
 @app.callback(
     Output("navbar-container", "children"),
-    Output("page-content", "children"),
+    Output("page-leadfinder", "style"),
+    Output("page-coldcalls", "style"),
     Input("url", "pathname"),
 )
 def route(pathname):
+    show = {"display": "block"}
+    hide = {"display": "none"}
     if pathname == "/cold-calls":
-        return _navbar("/cold-calls"), cold_calls.layout()
-    return _navbar("/"), leadfinder.layout()
+        return _navbar("/cold-calls"), hide, show
+    return _navbar("/"), show, hide
 
 
 # ── Run ──────────────────────────────────────────────────────────────
