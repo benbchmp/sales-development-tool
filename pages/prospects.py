@@ -262,7 +262,6 @@ def _build_table(gid: str, groups: list[dict]) -> html.Div:
                 ) for g in other_groups
             ] if other_groups else [dbc.DropdownMenuItem("Aucun autre groupe", disabled=True)],
             color="secondary",
-            outline=True,
             size="sm",
         )
 
