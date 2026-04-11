@@ -2,7 +2,7 @@
 LeadFinder – page de recherche de leads Google Maps
 """
 
-import os, re, time, requests, pandas as pd
+import io, os, re, time, requests, pandas as pd
 from dotenv import load_dotenv
 from dash import html, dcc, Output, Input, State, no_update, ALL, callback_context
 import dash_bootstrap_components as dbc
@@ -151,33 +151,63 @@ def layout():
             ]), md=4),
             dbc.Col(dbc.Button("Rechercher", id="lf-btn-search", color="primary", className="w-100"), md=2),
             dbc.Col(dbc.Button(
-                html.I(className="bi bi-download", style={"fontSize": "1.1rem"}),
+                html.I(className="bi bi-file-earmark-excel", style={"fontSize": "1.1rem"}),
                 id="lf-btn-csv",
-                color="secondary",
+                color="success",
                 outline=True,
-                title="Exporter en CSV",
+                title="Exporter en Excel",
                 style={"padding": "6px 12px"},
             ), md="auto", className="d-flex align-items-center"),
         ], className="mb-3"),
 
-        # Filters
+        # Filters row
         dbc.Row([
             dbc.Col(dbc.Checklist(
                 id="lf-filter-no-site",
                 options=[{"label": " Sans site web uniquement", "value": "no_site"}],
                 value=["no_site"],
                 inline=True,
-            ), md=4),
-            dbc.Col(html.Div(id="lf-result-count", className="text-end text-muted"), md=8),
-        ], className="mb-3"),
+            ), md="auto"),
+            dbc.Col(dbc.Button(
+                [html.I(className="bi bi-funnel me-1"), "Filtres"],
+                id="lf-btn-toggle-filters",
+                color="secondary", outline=True, size="sm",
+            ), md="auto"),
+            dbc.Col(dbc.DropdownMenu(
+                label=html.Span([html.I(className="bi bi-layout-three-columns me-1"), "Colonnes"]),
+                children=[
+                    dbc.Checklist(
+                        id="lf-col-visibility",
+                        options=[{"label": c, "value": c} for c in ["Nom", "Localisation", "Téléphone", "Note", "Avis", "Site web", "Google Maps"]],
+                        value=["Nom", "Localisation", "Téléphone", "Note", "Avis", "Site web", "Google Maps"],
+                        style={"padding": "8px 12px"},
+                    )
+                ],
+                color="secondary", size="sm",
+                toggle_style={"fontSize": "0.85rem"},
+            ), md="auto"),
+            dbc.Col(html.Div(id="lf-result-count", className="text-muted"), md=True, className="text-end d-flex align-items-center justify-content-end"),
+        ], className="mb-2 g-2", align="center"),
+
+        # Collapse filtres par colonne
+        dbc.Collapse(
+            dbc.Card(dbc.CardBody(
+                html.Div(id="lf-filter-inputs-container"),
+                style={"padding": "8px"},
+            ), style={"backgroundColor": "#1e1e1e", "border": "1px solid #444"}),
+            id="lf-collapse-filters",
+            is_open=False,
+            className="mb-2",
+        ),
 
         # Loading + results
         dcc.Loading(id="lf-loading", children=[
             html.Div(id="lf-table-results"),
         ], type="circle"),
 
-        # Hidden store for full data
+        # Hidden stores
         dcc.Store(id="lf-store-data"),
+        dcc.Store(id="lf-col-filters", data={}),
         dcc.Download(id="lf-download-csv"),
         dcc.Store(id="lf-pending-prospect", data=None),
 
@@ -225,13 +255,66 @@ def register_callbacks(app):
             print(f"[LeadFinder] Erreur API : {e}")
             return []
 
+    ALL_COLS = ["Nom", "Localisation", "Téléphone", "Note", "Avis", "Site web", "Google Maps"]
+
+    # Toggle panneau filtres
+    @app.callback(
+        Output("lf-collapse-filters", "is_open"),
+        Output("lf-filter-inputs-container", "children"),
+        Input("lf-btn-toggle-filters", "n_clicks"),
+        State("lf-collapse-filters", "is_open"),
+        State("lf-col-visibility", "value"),
+        State("lf-col-filters", "data"),
+        prevent_initial_call=True,
+    )
+    def toggle_filters(n, is_open, visible_cols, current_filters):
+        visible = visible_cols or ALL_COLS
+        inputs = dbc.Row([
+            dbc.Col([
+                html.Small(c, className="text-muted d-block mb-1"),
+                dbc.Input(
+                    id=f"lf-filter-{c.lower().replace(' ', '-').replace('é', 'e').replace('è', 'e').replace('ê', 'e')}",
+                    value=current_filters.get(c, ""),
+                    placeholder=f"Filtrer {c}...",
+                    size="sm",
+                    debounce=True,
+                    style={"backgroundColor": "#2a2a2a", "color": "#ddd", "border": "1px solid #555"},
+                ),
+            ], md=True)
+            for c in visible if c != "Google Maps"
+        ], className="g-2")
+        return not is_open, inputs
+
+    # Agréger les filtres colonnes dans le Store
+    @app.callback(
+        Output("lf-col-filters", "data"),
+        Input("lf-filter-nom", "value"),
+        Input("lf-filter-localisation", "value"),
+        Input("lf-filter-telephone", "value"),
+        Input("lf-filter-note", "value"),
+        Input("lf-filter-avis", "value"),
+        Input("lf-filter-site-web", "value"),
+        prevent_initial_call=True,
+    )
+    def aggregate_filters(nom, loc, tel, note, avis, site):
+        return {
+            "Nom": nom or "",
+            "Localisation": loc or "",
+            "Téléphone": tel or "",
+            "Note": note or "",
+            "Avis": avis or "",
+            "Site web": site or "",
+        }
+
     @app.callback(
         Output("lf-table-results", "children"),
         Output("lf-result-count", "children"),
         Input("lf-store-data", "data"),
         Input("lf-filter-no-site", "value"),
+        Input("lf-col-filters", "data"),
+        Input("lf-col-visibility", "value"),
     )
-    def update_table(records, filters):
+    def update_table(records, filters, col_filters, visible_cols):
         if not records:
             return "", ""
         df = pd.DataFrame(records)
@@ -239,9 +322,14 @@ def register_callbacks(app):
         total = len(df)
         if "no_site" in (filters or []):
             df = df[df["Site web"].fillna("").str.strip() == ""]
-        shown = len(df)
 
-        cols = ["Nom", "Localisation", "Téléphone", "Note", "Avis", "Site web", "Statut", "Google Maps"]
+        # Appliquer filtres par colonne
+        for col, val in (col_filters or {}).items():
+            if val and col in df.columns:
+                df = df[df[col].astype(str).str.contains(val, case=False, na=False)]
+
+        shown = len(df)
+        cols = [c for c in ALL_COLS if c in (visible_cols or ALL_COLS)]
 
         header = html.Thead(html.Tr(
             [html.Th("", style={"padding": "8px 6px", "width": "32px"})] +
@@ -249,7 +337,7 @@ def register_callbacks(app):
         ))
 
         rows = []
-        for i, row in enumerate(df.to_dict("records")):
+        for i, row in enumerate(df.reset_index(drop=True).to_dict("records")):
             cells = [html.Td(
                 dbc.Button(
                     html.I(className="bi bi-plus-circle"),
@@ -274,10 +362,7 @@ def register_callbacks(app):
 
         table = dbc.Table(
             [header, html.Tbody(rows)],
-            bordered=True,
-            dark=True,
-            hover=False,
-            size="sm",
+            bordered=True, dark=True, hover=False, size="sm",
             style={"fontSize": "0.85rem"},
         )
 
@@ -288,13 +373,34 @@ def register_callbacks(app):
         Output("lf-download-csv", "data"),
         Input("lf-btn-csv", "n_clicks"),
         State("lf-store-data", "data"),
+        State("lf-filter-no-site", "value"),
+        State("lf-col-filters", "data"),
+        State("lf-col-visibility", "value"),
         prevent_initial_call=True,
     )
-    def export_csv(n, records):
+    def export_excel(n, records, filters, col_filters, visible_cols):
         if not records:
             return no_update
         df = pd.DataFrame(records)
-        return dcc.send_data_frame(df.to_csv, "leads.csv", index=False)
+        # Appliquer les mêmes filtres que le tableau affiché
+        if "no_site" in (filters or []):
+            df = df[df["Site web"].fillna("").str.strip() == ""]
+        for col, val in (col_filters or {}).items():
+            if val and col in df.columns:
+                df = df[df[col].astype(str).str.contains(val, case=False, na=False)]
+        cols = [c for c in ALL_COLS if c in (visible_cols or ALL_COLS)]
+        df = df[[c for c in cols if c in df.columns]]
+
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Leads")
+            ws = writer.sheets["Leads"]
+            # Largeurs automatiques
+            for col_cells in ws.columns:
+                max_len = max((len(str(c.value or "")) for c in col_cells), default=10)
+                ws.column_dimensions[col_cells[0].column_letter].width = min(max_len + 4, 50)
+        buf.seek(0)
+        return dcc.send_bytes(buf.read, "leads.xlsx")
 
     # Ouvrir le modal ajout prospect
     @app.callback(

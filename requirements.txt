@@ -3,3 +3,4 @@ pandas
 python-dotenv
 dash
 dash-bootstrap-components
+openpyxl

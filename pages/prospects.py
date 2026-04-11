@@ -3,10 +3,14 @@ Prospects – Watchlist par groupes
 Données persistées dans prospects_data.json
 """
 
+import io
 import json
 import os
+import re
 import uuid
 from datetime import datetime
+
+import pandas as pd
 
 from dash import html, dcc, Input, Output, State, callback_context, no_update, ALL, MATCH
 import dash_bootstrap_components as dbc
@@ -159,6 +163,14 @@ def layout():
                 id="pr-btn-delete-group",
                 color="danger", outline=True, size="sm",
             ), width="auto"),
+
+            # Export Excel
+            dbc.Col(dbc.Button(
+                html.I(className="bi bi-file-earmark-excel", style={"fontSize": "1.1rem"}),
+                id="pr-btn-export",
+                color="success", outline=True, size="sm",
+                title="Exporter le groupe en Excel",
+            ), width="auto"),
         ], className="mb-3 g-2", align="center"),
 
         # Formulaire nouveau groupe (caché par défaut)
@@ -202,6 +214,7 @@ def layout():
         # Store pour trigger
         dcc.Store(id="pr-trigger", data=0),
         dcc.Store(id="pr-pending-delete-gid", data=None),
+        dcc.Download(id="pr-download-excel"),
 
     ], fluid=True)
 
@@ -530,3 +543,37 @@ def register_callbacks(app):
             return html.P("Aucun groupe — crée-en un pour commencer.", className="text-muted mt-3")
         groups = get_groups()
         return _build_table(gid, groups)
+
+    # Export Excel du groupe
+    @app.callback(
+        Output("pr-download-excel", "data"),
+        Input("pr-btn-export", "n_clicks"),
+        State("pr-group-select", "value"),
+        prevent_initial_call=True,
+    )
+    def export_group_excel(n, gid):
+        if not gid:
+            return no_update
+        groups = get_groups()
+        group = next((g for g in groups if g["id"] == gid), None)
+        if not group or not group["prospects"]:
+            return no_update
+
+        export_cols = ["Nom", "Localisation", "Téléphone", "Note", "Avis", "Site web", "Google Maps", "notes", "added_at"]
+        rows = []
+        for p in group["prospects"]:
+            rows.append({c: p.get(c, "") for c in export_cols})
+        df = pd.DataFrame(rows)
+        df = df.rename(columns={"notes": "Notes perso", "added_at": "Ajouté le"})
+
+        buf = io.BytesIO()
+        safe_name = re.sub(r'[\\/*?:\[\]]', '_', group["name"])
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name=safe_name[:31])
+            ws = writer.sheets[safe_name[:31]]
+            for col_cells in ws.columns:
+                max_len = max((len(str(c.value or "")) for c in col_cells), default=10)
+                ws.column_dimensions[col_cells[0].column_letter].width = min(max_len + 4, 50)
+        buf.seek(0)
+        filename = f"prospects_{safe_name}.xlsx"
+        return dcc.send_bytes(buf.read, filename)
