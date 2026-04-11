@@ -4,7 +4,7 @@ LeadFinder – page de recherche de leads Google Maps
 
 import os, re, time, requests, pandas as pd
 from dotenv import load_dotenv
-from dash import html, dcc, dash_table, Output, Input, State, no_update
+from dash import html, dcc, Output, Input, State, no_update
 import dash_bootstrap_components as dbc
 
 load_dotenv()
@@ -173,31 +173,7 @@ def layout():
 
         # Loading + results
         dcc.Loading(id="lf-loading", children=[
-            dash_table.DataTable(
-                id="lf-table-results",
-                columns=[],
-                data=[],
-                page_size=20,
-                sort_action="native",
-                filter_action="native",
-                style_table={"overflowX": "auto"},
-                style_header={"backgroundColor": "#303030", "fontWeight": "bold", "color": "#fff"},
-                style_cell={
-                    "backgroundColor": "#222",
-                    "color": "#ddd",
-                    "border": "1px solid #444",
-                    "textAlign": "left",
-                    "padding": "8px",
-                    "maxWidth": "300px",
-                    "overflow": "hidden",
-                    "textOverflow": "ellipsis",
-                },
-                style_data_conditional=[
-                    {"if": {"filter_query": '{Site web} = ""'}, "backgroundColor": "#1a3a1a"},
-                ],
-                tooltip_duration=None,
-                css=[{"selector": ".dash-table-tooltip", "rule": "background-color: #333; color: #eee;"}],
-            ),
+            html.Div(id="lf-table-results"),
         ], type="circle"),
 
         # Hidden store for full data
@@ -231,16 +207,14 @@ def register_callbacks(app):
             return []
 
     @app.callback(
-        Output("lf-table-results", "data"),
-        Output("lf-table-results", "columns"),
-        Output("lf-table-results", "tooltip_data"),
+        Output("lf-table-results", "children"),
         Output("lf-result-count", "children"),
         Input("lf-store-data", "data"),
         Input("lf-filter-no-site", "value"),
     )
     def update_table(records, filters):
         if not records:
-            return [], [], [], ""
+            return "", ""
         df = pd.DataFrame(records)
 
         total = len(df)
@@ -248,21 +222,35 @@ def register_callbacks(app):
             df = df[df["Site web"].fillna("").str.strip() == ""]
         shown = len(df)
 
-        visible_cols = ["Nom", "Localisation", "Téléphone", "Note", "Avis", "Site web", "Statut"]
-        columns = [{"name": c, "id": c} for c in visible_cols]
-        columns.append({"name": "Google Maps", "id": "Google Maps", "presentation": "markdown"})
+        cols = ["Nom", "Localisation", "Téléphone", "Note", "Avis", "Site web", "Statut", "Google Maps"]
 
-        df["Google Maps"] = df["Google Maps"].apply(
-            lambda u: f"[Voir]({u})" if u else ""
+        header = html.Thead(html.Tr([html.Th(c, style={"padding": "8px 10px", "whiteSpace": "nowrap"}) for c in cols]))
+
+        rows = []
+        for row in df.to_dict("records"):
+            cells = []
+            for c in cols:
+                val = str(row.get(c, ""))
+                if c == "Google Maps" and val:
+                    cells.append(html.Td(html.A("Voir", href=val, target="_blank", style={"color": "#4dabf7"}), style={"padding": "6px 10px"}))
+                elif c == "Site web" and val:
+                    cells.append(html.Td(html.A(val, href=val, target="_blank", style={"color": "#4dabf7", "wordBreak": "break-all"}), style={"padding": "6px 10px", "maxWidth": "200px"}))
+                else:
+                    bg = "#1a3a1a" if c == "Nom" and not row.get("Site web", "").strip() else "transparent"
+                    cells.append(html.Td(val, style={"padding": "6px 10px", "backgroundColor": bg}))
+            rows.append(html.Tr(cells))
+
+        table = dbc.Table(
+            [header, html.Tbody(rows)],
+            bordered=True,
+            dark=True,
+            hover=False,
+            size="sm",
+            style={"fontSize": "0.85rem"},
         )
 
-        tooltip = [
-            {col: {"value": str(row.get(col, "")), "type": "text"} for col in visible_cols}
-            for row in df.to_dict("records")
-        ]
-
         count_text = f"{shown} résultats affichés / {total} trouvés au total"
-        return df.to_dict("records"), columns, tooltip, count_text
+        return table, count_text
 
     @app.callback(
         Output("lf-download-csv", "data"),
