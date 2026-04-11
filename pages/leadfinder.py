@@ -4,7 +4,7 @@ LeadFinder – page de recherche de leads Google Maps
 
 import os, re, time, requests, pandas as pd
 from dotenv import load_dotenv
-from dash import html, dcc, Output, Input, State, no_update, ALL
+from dash import html, dcc, Output, Input, State, no_update, ALL, callback_context
 import dash_bootstrap_components as dbc
 
 load_dotenv()
