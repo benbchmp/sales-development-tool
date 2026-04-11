@@ -61,8 +61,9 @@ def _navbar(active_path: str) -> dbc.Container:
             dbc.Col(
                 html.Div([
                     _nav_tab("LeadFinder", "/", active_path == "/"),
-                    _nav_tab("Call Tracker", "/cold-calls", active_path == "/cold-calls"),
                     _nav_tab("Prospects", "/prospects", active_path == "/prospects"),
+                    html.Span(style={"width": "24px"}),
+                    _nav_tab("Call Tracker", "/cold-calls", active_path == "/cold-calls"),
                 ], style={"display": "flex", "gap": "8px", "alignItems": "center"}),
                 width="auto", className="d-flex align-items-center",
             ),
