@@ -264,7 +264,6 @@ def _build_table(gid: str, groups: list[dict]) -> html.Div:
             color="secondary",
             outline=True,
             size="sm",
-            title="Déplacer vers...",
         )
 
         rows.append(html.Tr([
