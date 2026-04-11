@@ -255,7 +255,7 @@ def register_callbacks(app):
     @app.callback(
         Output("lf-download-csv", "data"),
         Input("lf-btn-csv", "n_clicks"),
-        State("lf-table-results", "data"),
+        State("lf-store-data", "data"),
         prevent_initial_call=True,
     )
     def export_csv(n, records):
