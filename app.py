@@ -10,6 +10,7 @@ import dash_bootstrap_components as dbc
 
 import pages.leadfinder as leadfinder
 import pages.cold_calls as cold_calls
+import pages.prospects as prospects
 
 load_dotenv()
 
@@ -23,6 +24,7 @@ server = app.server  # pour gunicorn
 
 leadfinder.register_callbacks(app)
 cold_calls.register_callbacks(app)
+prospects.register_callbacks(app)
 
 # ── Navbar ───────────────────────────────────────────────────────────
 
@@ -60,6 +62,7 @@ def _navbar(active_path: str) -> dbc.Container:
                 html.Div([
                     _nav_tab("LeadFinder", "/", active_path == "/"),
                     _nav_tab("Call Tracker", "/cold-calls", active_path == "/cold-calls"),
+                    _nav_tab("Prospects", "/prospects", active_path == "/prospects"),
                 ], style={"display": "flex", "gap": "8px", "alignItems": "center"}),
                 width="auto", className="d-flex align-items-center",
             ),
@@ -76,6 +79,7 @@ app.layout = html.Div([
     html.Div(id="navbar-container"),
     html.Div(leadfinder.layout(), id="page-leadfinder"),
     html.Div(cold_calls.layout(), id="page-coldcalls"),
+    html.Div(prospects.layout(), id="page-prospects"),
 ])
 
 
@@ -83,14 +87,17 @@ app.layout = html.Div([
     Output("navbar-container", "children"),
     Output("page-leadfinder", "style"),
     Output("page-coldcalls", "style"),
+    Output("page-prospects", "style"),
     Input("url", "pathname"),
 )
 def route(pathname):
     show = {"display": "block"}
     hide = {"display": "none"}
     if pathname == "/cold-calls":
-        return _navbar("/cold-calls"), hide, show
-    return _navbar("/"), show, hide
+        return _navbar("/cold-calls"), hide, show, hide
+    if pathname == "/prospects":
+        return _navbar("/prospects"), hide, hide, show
+    return _navbar("/"), show, hide, hide
 
 
 # ── Run ──────────────────────────────────────────────────────────────

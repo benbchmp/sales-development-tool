@@ -4,7 +4,7 @@ LeadFinder – page de recherche de leads Google Maps
 
 import os, re, time, requests, pandas as pd
 from dotenv import load_dotenv
-from dash import html, dcc, Output, Input, State, no_update
+from dash import html, dcc, Output, Input, State, no_update, ALL
 import dash_bootstrap_components as dbc
 
 load_dotenv()
@@ -179,6 +179,25 @@ def layout():
         # Hidden store for full data
         dcc.Store(id="lf-store-data"),
         dcc.Download(id="lf-download-csv"),
+        dcc.Store(id="lf-pending-prospect", data=None),
+
+        # Feedback ajout prospect
+        dbc.Alert(id="lf-prospect-feedback", is_open=False, duration=2500, className="text-center mt-2"),
+
+        # Modal ajout aux prospects
+        dbc.Modal([
+            dbc.ModalHeader(dbc.ModalTitle(id="lf-modal-title")),
+            dbc.ModalBody([
+                html.P("Ajouter à un groupe existant :", className="text-muted mb-2"),
+                html.Div(id="lf-modal-groups"),
+                html.Hr(style={"borderColor": "#444"}),
+                html.P("Ou créer un nouveau groupe :", className="text-muted mb-2"),
+                dbc.Row([
+                    dbc.Col(dbc.Input(id="lf-modal-new-group", placeholder="Nom du groupe...", size="sm"), md=8),
+                    dbc.Col(dbc.Button("Créer & Ajouter", id="lf-modal-btn-create", color="primary", size="sm"), width="auto"),
+                ], className="g-2", align="center"),
+            ]),
+        ], id="lf-prospect-modal", is_open=False),
 
     ], fluid=True)
 
@@ -224,11 +243,24 @@ def register_callbacks(app):
 
         cols = ["Nom", "Localisation", "Téléphone", "Note", "Avis", "Site web", "Statut", "Google Maps"]
 
-        header = html.Thead(html.Tr([html.Th(c, style={"padding": "8px 10px", "whiteSpace": "nowrap"}) for c in cols]))
+        header = html.Thead(html.Tr(
+            [html.Th("", style={"padding": "8px 6px", "width": "32px"})] +
+            [html.Th(c, style={"padding": "8px 10px", "whiteSpace": "nowrap"}) for c in cols]
+        ))
 
         rows = []
-        for row in df.to_dict("records"):
-            cells = []
+        for i, row in enumerate(df.to_dict("records")):
+            cells = [html.Td(
+                dbc.Button(
+                    html.I(className="bi bi-plus-circle"),
+                    id={"type": "lf-add-prospect-btn", "idx": i},
+                    color="success", outline=True, size="sm",
+                    title="Ajouter aux prospects",
+                    style={"padding": "2px 6px"},
+                    n_clicks=0,
+                ),
+                style={"padding": "4px 6px"},
+            )]
             for c in cols:
                 val = str(row.get(c, ""))
                 if c == "Google Maps" and val:
@@ -263,3 +295,113 @@ def register_callbacks(app):
             return no_update
         df = pd.DataFrame(records)
         return dcc.send_data_frame(df.to_csv, "leads.csv", index=False)
+
+    # Ouvrir le modal ajout prospect
+    @app.callback(
+        Output("lf-prospect-modal", "is_open"),
+        Output("lf-modal-title", "children"),
+        Output("lf-modal-groups", "children"),
+        Output("lf-pending-prospect", "data"),
+        Input({"type": "lf-add-prospect-btn", "idx": ALL}, "n_clicks"),
+        State("lf-store-data", "data"),
+        State("lf-filter-no-site", "value"),
+        prevent_initial_call=True,
+    )
+    def open_prospect_modal(n_clicks_list, records, filters):
+        from pages.prospects import get_groups, add_prospect_to_group
+        ctx = callback_context
+        if not ctx.triggered or not any(n_clicks_list):
+            return no_update, no_update, no_update, no_update
+
+        triggered_id = ctx.triggered[0]["prop_id"]
+        import json as _json
+        try:
+            idx = _json.loads(triggered_id.replace(".n_clicks", ""))["idx"]
+        except Exception:
+            return no_update, no_update, no_update, no_update
+
+        if not records:
+            return no_update, no_update, no_update, no_update
+
+        df = pd.DataFrame(records)
+        if "no_site" in (filters or []):
+            df = df[df["Site web"].fillna("").str.strip() == ""]
+        df = df.reset_index(drop=True)
+
+        if idx >= len(df):
+            return no_update, no_update, no_update, no_update
+
+        row = df.iloc[idx].to_dict()
+        groups = get_groups()
+
+        # Vérifier lesquels contiennent déjà ce prospect
+        already_in = set()
+        for g in groups:
+            for p in g["prospects"]:
+                if p["Nom"] == row.get("Nom") and p.get("Localisation") == row.get("Localisation"):
+                    already_in.add(g["id"])
+
+        if groups:
+            group_btns = [
+                dbc.Button(
+                    [g["name"], html.Span(" (déjà ajouté)", className="text-muted ms-1 small") if g["id"] in already_in else ""],
+                    id={"type": "lf-modal-group-btn", "gid": g["id"]},
+                    color="secondary" if g["id"] in already_in else "primary",
+                    outline=True,
+                    disabled=g["id"] in already_in,
+                    className="me-2 mb-2",
+                    n_clicks=0,
+                )
+                for g in groups
+            ]
+        else:
+            group_btns = [html.P("Aucun groupe existant.", className="text-muted")]
+
+        return True, f"Ajouter : {row.get('Nom', '')}", group_btns, row
+
+    # Ajouter au groupe existant via modal
+    @app.callback(
+        Output("lf-prospect-modal", "is_open", allow_duplicate=True),
+        Output("lf-prospect-feedback", "children"),
+        Output("lf-prospect-feedback", "color"),
+        Output("lf-prospect-feedback", "is_open"),
+        Input({"type": "lf-modal-group-btn", "gid": ALL}, "n_clicks"),
+        State("lf-pending-prospect", "data"),
+        prevent_initial_call=True,
+    )
+    def add_to_existing_group(n_clicks_list, prospect):
+        from pages.prospects import get_groups, add_prospect_to_group
+        ctx = callback_context
+        if not ctx.triggered or not any(n_clicks_list):
+            return no_update, no_update, no_update, no_update
+        import json as _json
+        triggered_id = ctx.triggered[0]["prop_id"].replace(".n_clicks", "")
+        try:
+            gid = _json.loads(triggered_id)["gid"]
+        except Exception:
+            return no_update, no_update, no_update, no_update
+
+        groups = get_groups()
+        group_name = next((g["name"] for g in groups if g["id"] == gid), "?")
+        add_prospect_to_group(gid, prospect)
+        return False, f"✓ Ajouté à « {group_name} »", "success", True
+
+    # Créer groupe et ajouter via modal
+    @app.callback(
+        Output("lf-prospect-modal", "is_open", allow_duplicate=True),
+        Output("lf-prospect-feedback", "children", allow_duplicate=True),
+        Output("lf-prospect-feedback", "color", allow_duplicate=True),
+        Output("lf-prospect-feedback", "is_open", allow_duplicate=True),
+        Output("lf-modal-new-group", "value"),
+        Input("lf-modal-btn-create", "n_clicks"),
+        State("lf-modal-new-group", "value"),
+        State("lf-pending-prospect", "data"),
+        prevent_initial_call=True,
+    )
+    def create_group_and_add(n, group_name, prospect):
+        from pages.prospects import add_group, add_prospect_to_group
+        if not group_name or not group_name.strip() or not prospect:
+            return no_update, "Saisis un nom de groupe.", "warning", True, no_update
+        gid = add_group(group_name)
+        add_prospect_to_group(gid, prospect)
+        return False, f"✓ Groupe « {group_name.strip()} » créé et prospect ajouté.", "success", True, ""
